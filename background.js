@@ -1,7 +1,7 @@
 const defaultAiSettings = {
   provider: "gemini",
-  endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-  model: "gemini-2.5-flash",
+  endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent",
+  model: "gemini-3-flash",
   apiKey: ""
 };
 

@@ -1,14 +1,18 @@
 const defaultSettings = {
 	provider: "gemini",
-	endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-	model: "gemini-2.5-flash",
+	endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent",
+	model: "gemini-3-flash",
 	apiKey: ""
 };
 
 const providerDefaults = {
 	gemini: {
-		endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-		model: "gemini-2.5-flash"
+		endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent",
+		model: "gemini-3-flash"
+	},
+	gemma: {
+		endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b:generateContent",
+		model: "gemma-4-31b"
 	},
 	openai: {
 		endpoint: "https://api.openai.com/v1/chat/completions",

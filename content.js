@@ -94,6 +94,7 @@ if (!window.__googleCheatsBootstrapped) {
 		const options = members.map((member, index) => extractOptionFromControl(member, index));
 		const representative = groupContainer || control;
 		const dataElement = extractDataElement(representative) || extractDataElement(control);
+		const images = extractQuestionsImages(representative || control);
 
 		return {
 			id: buildQuestionId(representative, questionMeta, control, dataElement),
@@ -107,6 +108,7 @@ if (!window.__googleCheatsBootstrapped) {
 			description: getDescriptionText(control, groupContainer),
 			confidence: questionMeta.confidence,
 			evidence: questionMeta.evidence,
+			images,
 			order
 		};
 	}
@@ -114,6 +116,7 @@ if (!window.__googleCheatsBootstrapped) {
 	function buildQuestionFromControl(control, order) {
 		const questionMeta = resolveQuestionMeta(control, { type: getControlType(control) });
 		const dataElement = extractDataElement(control);
+		const images = extractQuestionsImages(control);
 		const question = {
 			id: buildQuestionId(control, questionMeta, control, dataElement),
 			text: questionMeta.text,
@@ -131,6 +134,7 @@ if (!window.__googleCheatsBootstrapped) {
 			inputmode: control.getAttribute('inputmode') || null,
 			confidence: questionMeta.confidence,
 			evidence: questionMeta.evidence,
+			images,
 			order
 		};
 
@@ -472,6 +476,29 @@ if (!window.__googleCheatsBootstrapped) {
 		};
 	}
 
+	function extractQuestionsImages(element) {
+		if (!element) {
+			return [];
+		}
+
+		const images = [];
+		const scope = element.closest('[role="listitem"]') || element.closest('.Qr7Oae') || element;
+		const imgElements = Array.from(scope.querySelectorAll('img[src]')).filter(isElementVisible);
+
+		imgElements.slice(0, 3).forEach((img) => {
+			const src = img.src || img.getAttribute('src') || '';
+			if (src && src.length < 5000) {
+				images.push({
+					src,
+					alt: img.alt || img.getAttribute('alt') || '',
+					title: img.title || img.getAttribute('title') || ''
+				});
+			}
+		});
+
+		return images;
+	}
+
 	function extractDataElement(control) {
 		const ancestors = [control, ...getAncestorChain(control)];
 
@@ -665,6 +692,20 @@ if (!window.__googleCheatsBootstrapped) {
 
 		if (element.hidden || element.getAttribute?.('aria-hidden') === 'true') {
 			return false;
+		}
+
+		let ancestor = element.parentElement;
+		while (ancestor) {
+			if (ancestor.hidden || ancestor.getAttribute?.('aria-hidden') === 'true') {
+				return false;
+			}
+
+			const ancestorStyle = window.getComputedStyle(ancestor);
+			if (ancestorStyle.display === 'none' || ancestorStyle.visibility === 'hidden') {
+				return false;
+			}
+
+			ancestor = ancestor.parentElement;
 		}
 
 		const style = window.getComputedStyle(element);
