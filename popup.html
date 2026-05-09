@@ -10,17 +10,14 @@
 <body>
     <main class="shell">
         <section class="hero">
-            <p class="eyebrow">Chrome Extension</p>
-            <h1>Analyseur de formulaires</h1>
-            <p>Inspecte la page active, reconstruit les questions et prépare des réponses éditables.</p>
+            <p class="eyebrow">Google Cheats</p>
+            <h1>Analyse de formulaires</h1>
         </section>
 
         <section class="panel">
-            <div class="action-row">
+            <div class="buttons-row">
                 <button id="analyze-button" class="primary" type="button">Analyser le formulaire</button>
                 <button id="generate-button" class="secondary" type="button" disabled>Générer avec Gemini</button>
-            </div>
-            <div class="small-button-row">
                 <button id="copy-button" class="tertiary" type="button" disabled>Copier le JSON</button>
             </div>
             <div class="status-bar">
@@ -43,7 +40,7 @@
             </div>
         </section>
 
-        <details class="panel settings-panel" open>
+        <details class="panel settings-panel" id="settings-panel">
             <summary>Configuration Gemini</summary>
             <div class="settings-grid">
                 <label>
@@ -75,6 +72,10 @@
                 <button id="save-settings-button" class="secondary" type="button">Enregistrer la configuration</button>
             </div>
         </details>
+
+        <footer class="footer">
+            <p id="footer-content">Développé avec ❤️ par <span id="authors-container"></span></p>
+        </footer>
     </main>
 </body>
 </html>

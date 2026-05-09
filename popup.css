@@ -20,7 +20,8 @@
 html,
 body {
 	margin: 0;
-	min-width: 420px;
+	min-width: 600px;
+	min-height: 400px;
 	background:
 		radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 36%),
 		radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.18), transparent 34%),
@@ -31,6 +32,7 @@ body {
 
 body {
 	position: relative;
+	overflow-y: auto;
 }
 
 body::before {
@@ -113,6 +115,16 @@ body::before {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 10px;
+}
+
+.buttons-row {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.buttons-row button {
+	width: 100%;
 }
 
 .small-button-row {
@@ -371,3 +383,26 @@ button:disabled {
 	color: var(--muted);
 }
 
+.footer {
+	margin-top: 16px;
+	padding: 12px;
+	text-align: center;
+	border-top: 1px solid var(--border);
+}
+
+.footer p {
+	margin: 0;
+	font-size: 12px;
+	color: var(--muted);
+	line-height: 1.4;
+}
+
+.author-link {
+	color: var(--muted);
+	cursor: pointer;
+	text-decoration: none;
+}
+
+.author-link:hover {
+	text-decoration: none;
+}

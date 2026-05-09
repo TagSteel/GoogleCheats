@@ -30,12 +30,17 @@ const editorNodes = new Map();
 
 const elements = {};
 
-document.addEventListener("DOMContentLoaded", initializePopup);
+document.addEventListener("DOMContentLoaded", () => {
+	initializePopup();
+	initializeFooter();
+});
 
 async function initializePopup() {
 	cacheElements();
 	bindEvents();
 	await loadSettings();
+	await loadPersistedData();
+	updateSettingsPanelState();
 	setStatus("Prêt à analyser la page active.");
 }
 
@@ -52,6 +57,8 @@ function cacheElements() {
 	elements.modelInput = document.getElementById("model-input");
 	elements.apiKeyInput = document.getElementById("api-key-input");
 	elements.saveSettingsButton = document.getElementById("save-settings-button");
+	elements.settingsPanel = document.getElementById("settings-panel");
+	elements.authorsContainer = document.getElementById("authors-container");
 }
 
 function bindEvents() {
@@ -73,6 +80,7 @@ async function handleAnalyzeClick() {
 		const formData = response?.form ? response : { form: response };
 		state.formData = formData;
 		state.suggestions = [];
+		await persistData();
 		renderFormSummary(getFormPayload().questions || []);
 		renderAnswers([]);
 		elements.generateButton.disabled = !(getFormPayload().questions || []).length;
@@ -116,6 +124,7 @@ async function handleGenerateClick() {
 		}
 
 		state.suggestions = Array.isArray(response.answers) ? response.answers : [];
+		await persistData();
 		renderAnswers(state.suggestions);
 		elements.copyButton.disabled = state.suggestions.length === 0;
 		setStatus(
@@ -147,6 +156,7 @@ async function handleSaveSettingsClick() {
 	const settings = collectSettingsFromForm();
 	state.settings = settings;
 	await chrome.storage.local.set({ formAnalyzerSettings: settings });
+	updateSettingsPanelState();
 	setStatus("Configuration enregistrée.", "success");
 }
 
@@ -162,6 +172,36 @@ async function loadSettings() {
 	const stored = await chrome.storage.local.get("formAnalyzerSettings");
 	state.settings = { ...defaultSettings, ...(stored.formAnalyzerSettings || {}) };
 	applySettingsToForm(state.settings);
+}
+
+async function loadPersistedData() {
+	const stored = await chrome.storage.local.get("formAnalyzerData");
+	if (stored.formAnalyzerData) {
+		state.formData = stored.formAnalyzerData.formData || null;
+		state.suggestions = stored.formAnalyzerData.suggestions || [];
+		if (state.formData) {
+			renderFormSummary(getFormPayload()?.questions || []);
+			renderAnswers(state.suggestions);
+			elements.generateButton.disabled = !(getFormPayload()?.questions || []).length;
+			elements.copyButton.disabled = state.suggestions.length === 0;
+		}
+	}
+}
+
+async function persistData() {
+	await chrome.storage.local.set({
+		formAnalyzerData: {
+			formData: state.formData,
+			suggestions: state.suggestions
+		}
+	});
+}
+
+function updateSettingsPanelState() {
+	const hasApiKey = state.settings?.apiKey?.trim();
+	if (elements.settingsPanel) {
+		elements.settingsPanel.open = !hasApiKey;
+	}
 }
 
 function applySettingsToForm(settings) {
@@ -457,6 +497,70 @@ function readEditorValue(question, control) {
 function formatConfidence(value) {
 	const numeric = Number.isFinite(Number(value)) ? Number(value) : 0;
 	return `${Math.max(0, Math.min(100, Math.round(numeric)))}%`;
+}
+
+async function initializeFooter() {
+	try {
+		const response = await fetch(chrome.runtime.getURL("manifest.json"));
+		const manifest = await response.json();
+		const authorsData = manifest.author || [];
+		const authors = parseAuthors(authorsData);
+		renderAuthors(authors);
+	} catch (error) {
+		console.error("Erreur lors du chargement des auteurs:", error);
+	}
+}
+
+function parseAuthors(authorsData) {
+	if (!authorsData) {
+		return [];
+	}
+
+	if (Array.isArray(authorsData)) {
+		return authorsData.filter((author) => typeof author === "string" && author.trim()).map((author) => author.trim());
+	}
+
+	if (typeof authorsData === "string") {
+		const parts = authorsData.split(" et ").map((s) => s.trim()).filter(Boolean);
+		return parts;
+	}
+
+	return [];
+}
+
+function renderAuthors(authors) {
+	if (!elements.authorsContainer || authors.length === 0) {
+		return;
+	}
+
+	elements.authorsContainer.innerHTML = "";
+
+	if (authors.length === 1) {
+		elements.authorsContainer.appendChild(createAuthorLink(authors[0]));
+	} else if (authors.length === 2) {
+		elements.authorsContainer.appendChild(createAuthorLink(authors[0]));
+		elements.authorsContainer.appendChild(document.createTextNode(" et "));
+		elements.authorsContainer.appendChild(createAuthorLink(authors[1]));
+	} else {
+		for (let i = 0; i < authors.length; i++) {
+			elements.authorsContainer.appendChild(createAuthorLink(authors[i]));
+			if (i < authors.length - 2) {
+				elements.authorsContainer.appendChild(document.createTextNode(", "));
+			} else if (i === authors.length - 2) {
+				elements.authorsContainer.appendChild(document.createTextNode(" et "));
+			}
+		}
+	}
+}
+
+function createAuthorLink(author) {
+	const link = document.createElement("a");
+	link.href = `https://github.com/${author}`;
+	link.target = "_blank";
+	link.rel = "noopener noreferrer";
+	link.className = "author-link";
+	link.textContent = author;
+	return link;
 }
 
 function requestFormDataFromActiveTab() {
