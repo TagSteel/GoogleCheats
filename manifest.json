@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Google Cheats",
+  "short_name": "GCheats",
+  "author": "TagSteel et MythUp",
+  "version": "1.0.0",
+  "description": "Analyse les formulaires, reconstruit les questions et propose des réponses éditables via Gemini 2.5 Flash.",
+  "permissions": ["activeTab", "storage", "scripting", "tabs"],
+  "host_permissions": ["https://*.forms.gle/*", "https://generativelanguage.googleapis.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "default_title": "Google Cheats - Gemini",
+  "content_scripts": [
+    {
+      "matches": ["https://*.forms.gle/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}

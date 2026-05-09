@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form Analyzer</title>
+    <link rel="stylesheet" href="popup.css">
+    <script src="popup.js" defer></script>
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <p class="eyebrow">Chrome Extension</p>
+            <h1>Analyseur de formulaires</h1>
+            <p>Inspecte la page active, reconstruit les questions et prépare des réponses éditables.</p>
+        </section>
+
+        <section class="panel">
+            <div class="action-row">
+                <button id="analyze-button" class="primary" type="button">Analyser le formulaire</button>
+                <button id="generate-button" class="secondary" type="button" disabled>Générer avec Gemini</button>
+            </div>
+            <div class="small-button-row">
+                <button id="copy-button" class="tertiary" type="button" disabled>Copier le JSON</button>
+            </div>
+            <div class="status-bar">
+                <span id="status-pill" class="pill">Prêt</span>
+                <span id="loader" class="loader" aria-hidden="true"></span>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="section-title">Formulaire détecté</div>
+            <div id="form-summary" class="summary-grid">
+                <p class="empty-state">Lancez une analyse sur l'onglet actif.</p>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="section-title">Réponses suggérées</div>
+            <div id="answers-list" class="answers-list">
+                <p class="empty-state">Aucune réponse générée pour le moment.</p>
+            </div>
+        </section>
+
+        <details class="panel settings-panel" open>
+            <summary>Configuration Gemini</summary>
+            <div class="settings-grid">
+                <label>
+                    <span>Provider</span>
+                    <select id="provider-select">
+                        <option value="gemini" selected>Gemini 2.5 Flash / Google AI Studio</option>
+                        <option value="openai">OpenAI / compatible</option>
+                        <option value="anthropic">Anthropic</option>
+                    </select>
+                </label>
+
+                <label>
+                    <span>Endpoint Gemini</span>
+                    <input id="endpoint-input" type="text" placeholder="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent">
+                </label>
+
+                <label>
+                    <span>Modèle</span>
+                    <input id="model-input" type="text" placeholder="gemini-2.5-flash">
+                </label>
+
+                <label>
+                    <span>Clé API Google AI Studio</span>
+                    <input id="api-key-input" type="password" placeholder="AIza...">
+                </label>
+
+                <p class="settings-note">Si ce champ est vide, l'extension lit automatiquement `GEMINI_KEY` depuis le fichier .env.</p>
+
+                <button id="save-settings-button" class="secondary" type="button">Enregistrer la configuration</button>
+            </div>
+        </details>
+    </main>
+</body>
+</html>
