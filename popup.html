@@ -19,6 +19,7 @@
                 <button id="analyze-button" class="primary" type="button">Analyser le formulaire</button>
                 <button id="generate-button" class="secondary" type="button" disabled>Générer avec Gemini</button>
                 <button id="copy-button" class="tertiary" type="button" disabled>Copier le JSON</button>
+                <button id="reset-button" class="tertiary" type="button">Réinitialiser</button>
             </div>
             <div class="status-bar">
                 <span id="status-pill" class="pill">Prêt</span>
@@ -26,19 +27,26 @@
             </div>
         </section>
 
-        <section class="panel">
-            <div class="section-title">Formulaire détecté</div>
+        <details class="panel collapsible-panel" id="form-panel">
+            <summary>Formulaire détecté</summary>
             <div id="form-summary" class="summary-grid">
                 <p class="empty-state">Lancez une analyse sur l'onglet actif.</p>
             </div>
-        </section>
+        </details>
 
-        <section class="panel">
-            <div class="section-title">Réponses suggérées</div>
+        <details class="panel collapsible-panel" id="answers-panel">
+            <summary>Réponses suggérées</summary>
             <div id="answers-list" class="answers-list">
                 <p class="empty-state">Aucune réponse générée pour le moment.</p>
             </div>
-        </section>
+        </details>
+
+        <details class="panel collapsible-panel history-panel" id="history-panel">
+            <summary>Historique</summary>
+            <div id="history-list" class="history-list">
+                <p class="empty-state">Aucun formulaire analysé pour le moment.</p>
+            </div>
+        </details>
 
         <details class="panel settings-panel" id="settings-panel">
             <summary>Configuration Gemini</summary>

@@ -23,6 +23,9 @@ const providerDefaults = {
 const state = {
 	formData: null,
 	suggestions: [],
+	history: [],
+	currentFormSignature: "",
+	currentHistoryEntryId: "",
 	settings: { ...defaultSettings }
 };
 
@@ -48,10 +51,12 @@ function cacheElements() {
 	elements.analyzeButton = document.getElementById("analyze-button");
 	elements.generateButton = document.getElementById("generate-button");
 	elements.copyButton = document.getElementById("copy-button");
+	elements.resetButton = document.getElementById("reset-button");
 	elements.statusPill = document.getElementById("status-pill");
 	elements.loader = document.getElementById("loader");
 	elements.formSummary = document.getElementById("form-summary");
 	elements.answersList = document.getElementById("answers-list");
+	elements.historyList = document.getElementById("history-list");
 	elements.providerSelect = document.getElementById("provider-select");
 	elements.endpointInput = document.getElementById("endpoint-input");
 	elements.modelInput = document.getElementById("model-input");
@@ -65,8 +70,10 @@ function bindEvents() {
 	elements.analyzeButton.addEventListener("click", handleAnalyzeClick);
 	elements.generateButton.addEventListener("click", handleGenerateClick);
 	elements.copyButton.addEventListener("click", handleCopyClick);
+	elements.resetButton.addEventListener("click", handleResetClick);
 	elements.saveSettingsButton.addEventListener("click", handleSaveSettingsClick);
 	elements.providerSelect.addEventListener("change", handleProviderChange);
+	elements.historyList.addEventListener("click", handleHistoryClick);
 }
 
 async function handleAnalyzeClick() {
@@ -78,14 +85,27 @@ async function handleAnalyzeClick() {
 		}
 
 		const formData = response?.form ? response : { form: response };
+		const formPayload = formData?.form || formData || null;
+		const formSignature = getFormSignature(formPayload);
+		const cachedHistoryEntry = findHistoryEntryBySignature(formSignature);
 		state.formData = formData;
-		state.suggestions = [];
+		state.currentFormSignature = formSignature;
+		state.suggestions = cachedHistoryEntry?.suggestions || [];
+		state.currentHistoryEntryId = "";
+		const historyEntry = await appendHistoryEntry(formData, formSignature, state.suggestions);
+		state.currentHistoryEntryId = historyEntry.id;
 		await persistData();
 		renderFormSummary(getFormPayload().questions || []);
-		renderAnswers([]);
+		renderAnswers(state.suggestions);
+		renderHistory();
 		elements.generateButton.disabled = !(getFormPayload().questions || []).length;
-		elements.copyButton.disabled = true;
-		setStatus(`${(getFormPayload().questions || []).length} question(s) détectée(s).`, "success");
+		elements.copyButton.disabled = state.suggestions.length === 0;
+		setStatus(
+			state.suggestions.length
+				? "Formulaire reconnu, réponses chargées depuis l'historique."
+				: `${(getFormPayload().questions || []).length} question(s) détectée(s).`,
+			"success"
+		);
 	} catch (error) {
 		setStatus(error.message || "Impossible d'analyser le formulaire.", "error");
 		renderFormSummary([]);
@@ -108,6 +128,17 @@ async function handleGenerateClick() {
 		return;
 	}
 
+	const formSignature = getFormSignature(formPayload);
+	const cachedHistoryEntry = findHistoryEntryBySignature(formSignature);
+	if (cachedHistoryEntry?.suggestions?.length) {
+		state.currentFormSignature = formSignature;
+		state.suggestions = cachedHistoryEntry.suggestions;
+		renderAnswers(state.suggestions);
+		elements.copyButton.disabled = state.suggestions.length === 0;
+		setStatus("Réponses récupérées depuis l'historique.", "success");
+		return;
+	}
+
 	const currentSettings = collectSettingsFromForm();
 	state.settings = currentSettings;
 
@@ -124,6 +155,7 @@ async function handleGenerateClick() {
 		}
 
 		state.suggestions = Array.isArray(response.answers) ? response.answers : [];
+		await updateCurrentHistoryEntrySuggestions(state.suggestions);
 		await persistData();
 		renderAnswers(state.suggestions);
 		elements.copyButton.disabled = state.suggestions.length === 0;
@@ -152,6 +184,20 @@ async function handleCopyClick() {
 	}
 }
 
+async function handleResetClick() {
+	state.formData = null;
+	state.suggestions = [];
+	state.currentFormSignature = "";
+	state.currentHistoryEntryId = "";
+	editorNodes.clear();
+	await chrome.storage.local.remove("formAnalyzerData");
+	renderFormSummary([]);
+	renderAnswers([]);
+	elements.generateButton.disabled = true;
+	elements.copyButton.disabled = true;
+	setStatus("Dernier formulaire réinitialisé.", "success");
+}
+
 async function handleSaveSettingsClick() {
 	const settings = collectSettingsFromForm();
 	state.settings = settings;
@@ -175,17 +221,19 @@ async function loadSettings() {
 }
 
 async function loadPersistedData() {
-	const stored = await chrome.storage.local.get("formAnalyzerData");
+	const stored = await chrome.storage.local.get(["formAnalyzerData", "formAnalyzerHistory"]);
+	state.history = Array.isArray(stored.formAnalyzerHistory) ? stored.formAnalyzerHistory : [];
+	renderHistory();
 	if (stored.formAnalyzerData) {
 		state.formData = stored.formAnalyzerData.formData || null;
 		state.suggestions = stored.formAnalyzerData.suggestions || [];
 		if (state.formData) {
-			renderFormSummary(getFormPayload()?.questions || []);
-			renderAnswers(state.suggestions);
-			elements.generateButton.disabled = !(getFormPayload()?.questions || []).length;
-			elements.copyButton.disabled = state.suggestions.length === 0;
+			state.currentFormSignature = getFormSignature(getFormPayload());
+			renderCurrentAnalysis();
+			return;
 		}
 	}
+	renderCurrentAnalysis();
 }
 
 async function persistData() {
@@ -195,6 +243,232 @@ async function persistData() {
 			suggestions: state.suggestions
 		}
 	});
+}
+
+async function appendHistoryEntry(formData, formSignature, suggestions = []) {
+	const entry = {
+		id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+		analyzedAt: new Date().toISOString(),
+		formSignature,
+		suggestions,
+		formData
+	};
+
+	state.history = [entry, ...state.history];
+	await chrome.storage.local.set({ formAnalyzerHistory: state.history });
+	return entry;
+}
+
+async function updateCurrentHistoryEntrySuggestions(suggestions) {
+	if (!state.currentHistoryEntryId) {
+		return;
+	}
+
+	const entry = state.history.find((item) => item.id === state.currentHistoryEntryId);
+	if (!entry) {
+		return;
+	}
+
+	entry.suggestions = suggestions;
+	await chrome.storage.local.set({ formAnalyzerHistory: state.history });
+}
+
+function renderCurrentAnalysis() {
+	const questions = getFormPayload()?.questions || [];
+	renderFormSummary(questions);
+	renderAnswers(state.suggestions);
+	elements.generateButton.disabled = !questions.length;
+	elements.copyButton.disabled = state.suggestions.length === 0;
+}
+
+function renderHistory() {
+	const historyEntries = Array.isArray(state.history) ? [...state.history].sort((left, right) => {
+		return new Date(right.analyzedAt || 0).getTime() - new Date(left.analyzedAt || 0).getTime();
+	}) : [];
+	elements.historyList.innerHTML = "";
+
+	if (!historyEntries.length) {
+		const emptyState = document.createElement("p");
+		emptyState.className = "empty-state";
+		emptyState.textContent = "Aucun formulaire analysé pour le moment.";
+		elements.historyList.appendChild(emptyState);
+		return;
+	}
+
+	let currentDayKey = "";
+	let currentDayContainer = null;
+	let currentDayCount = 0;
+
+	historyEntries.forEach((entry) => {
+		const analyzedAt = entry.analyzedAt ? new Date(entry.analyzedAt) : new Date();
+		const dayKey = getHistoryDayKey(analyzedAt);
+
+		if (dayKey !== currentDayKey) {
+			currentDayContainer = createHistoryDayGroup(analyzedAt);
+			elements.historyList.appendChild(currentDayContainer);
+			currentDayKey = dayKey;
+			currentDayCount = 0;
+		}
+
+		currentDayCount += 1;
+		currentDayContainer.querySelector(".history-day-count").textContent = `${currentDayCount} analyse(s)`;
+		currentDayContainer.querySelector(".history-day-items").appendChild(createHistoryItem(entry, analyzedAt));
+	});
+}
+
+function createHistoryDayGroup(date) {
+	const wrapper = document.createElement("article");
+	wrapper.className = "history-day";
+
+	const header = document.createElement("div");
+	header.className = "history-day-header";
+
+	const title = document.createElement("strong");
+	title.textContent = formatHistoryDayLabel(date);
+
+	const count = document.createElement("span");
+	count.className = "history-day-count";
+	count.textContent = "";
+
+	const items = document.createElement("div");
+	items.className = "history-day-items";
+
+	header.append(title, count);
+	wrapper.append(header, items);
+	return wrapper;
+}
+
+function createHistoryItem(entry, analyzedAt) {
+	const article = document.createElement("article");
+	article.className = "history-item";
+	article.dataset.historyId = entry.id || "";
+
+	const title = document.createElement("p");
+	title.className = "history-item-title";
+	title.textContent = getHistoryTitle(entry.formData);
+
+	const meta = document.createElement("div");
+	meta.className = "history-item-meta";
+	meta.textContent = `${formatHistoryTime(analyzedAt)} · ${getHistoryQuestionCount(entry.formData)} question(s)`;
+
+	const url = document.createElement("p");
+	url.className = "history-item-url";
+	url.textContent = getHistoryUrl(entry.formData);
+
+	const button = document.createElement("button");
+	button.type = "button";
+	button.className = "history-load-button";
+	button.dataset.historyId = entry.id || "";
+	button.textContent = "Charger";
+
+	article.append(title, meta, url, button);
+	return article;
+}
+
+async function handleHistoryClick(event) {
+	const button = event.target.closest("button[data-history-id]");
+	if (!button) {
+		return;
+	}
+
+	const entry = state.history.find((item) => item.id === button.dataset.historyId);
+	if (!entry) {
+		return;
+	}
+
+	state.formData = entry.formData || null;
+	state.currentFormSignature = entry.formSignature || getFormSignature(getFormPayload());
+	state.suggestions = Array.isArray(entry.suggestions) ? entry.suggestions : [];
+	state.currentHistoryEntryId = entry.id || "";
+	await persistData();
+	renderCurrentAnalysis();
+	setStatus("Formulaire chargé depuis l'historique.", "success");
+}
+
+function findHistoryEntryBySignature(signature) {
+	if (!signature) {
+		return null;
+	}
+
+	return [...state.history]
+		.sort((left, right) => new Date(right.analyzedAt || 0).getTime() - new Date(left.analyzedAt || 0).getTime())
+		.find((entry) => entry.formSignature === signature && Array.isArray(entry.suggestions) && entry.suggestions.length > 0) || null;
+}
+
+function getFormSignature(formPayload) {
+	if (!formPayload) {
+		return "";
+	}
+
+	const questions = Array.isArray(formPayload.questions) ? formPayload.questions : [];
+	const normalizedQuestions = questions.map((question) => {
+		const options = Array.isArray(question.options)
+			? question.options.map((option) => normalizeSignatureText(option?.label || option?.value || "")).join("|")
+			: "";
+
+		return [
+			normalizeSignatureText(question.id || ""),
+			normalizeSignatureText(question.type || ""),
+			normalizeSignatureText(question.text || question.questionCandidate || ""),
+			normalizeSignatureText(question.placeholder || ""),
+			normalizeSignatureText(question.required ? "required" : "optional"),
+			options
+		].join("::");
+	});
+
+	return [
+		normalizeSignatureText(formPayload.url || ""),
+		normalizeSignatureText(formPayload.title || ""),
+		String(questions.length),
+		normalizedQuestions.join("||")
+	].join("###");
+}
+
+function normalizeSignatureText(value) {
+	return String(value || "")
+		.normalize("NFKC")
+		.replace(/\s+/g, " ")
+		.trim()
+		.toLowerCase();
+}
+
+function getHistoryDayKey(date) {
+	return new Intl.DateTimeFormat("en-CA", {
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit"
+	}).format(date);
+}
+
+function formatHistoryDayLabel(date) {
+	return new Intl.DateTimeFormat("fr-FR", {
+		weekday: "long",
+		day: "2-digit",
+		month: "long",
+		year: "numeric"
+	}).format(date);
+}
+
+function formatHistoryTime(date) {
+	return new Intl.DateTimeFormat("fr-FR", {
+		hour: "2-digit",
+		minute: "2-digit"
+	}).format(date);
+}
+
+function getHistoryTitle(formData) {
+	const formPayload = formData?.form || formData || {};
+	return formPayload.title || formPayload.name || formPayload.url || "Formulaire sans titre";
+}
+
+function getHistoryUrl(formData) {
+	const formPayload = formData?.form || formData || {};
+	return formPayload.url || "URL inconnue";
+}
+
+function getHistoryQuestionCount(formData) {
+	const formPayload = formData?.form || formData || {};
+	return Array.isArray(formPayload.questions) ? formPayload.questions.length : 0;
 }
 
 function updateSettingsPanelState() {
