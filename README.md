@@ -1,6 +1,7 @@
 # Google Cheats
 
 [![GitHub Release](https://img.shields.io/github/v/release/TagSteel/GoogleCheats?display_name=release)](https://github.com/TagSteel/GoogleCheats/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Chromium-lightgrey)](https://github.com/TagSteel/ChromeRecover)
 
 Google Cheats is a browser extension that analyzes Google Forms and automatically generates editable answers using AI.
