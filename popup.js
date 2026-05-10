@@ -1,28 +1,44 @@
 const defaultSettings = {
 	provider: "gemini",
-	endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent",
-	model: "gemini-3-flash",
+	endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+	model: "gemini-2.5-flash",
+	formContext: "",
 	apiKey: ""
 };
 
 const providerDefaults = {
 	gemini: {
-		endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent",
-		model: "gemini-3-flash"
+		endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+		model: "gemini-2.5-flash"
 	},
 	gemma: {
-		endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b:generateContent",
-		model: "gemma-4-31b"
+		endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemma-3-27b-it:generateContent",
+		model: "gemma-3-27b-it"
 	},
 	openai: {
 		endpoint: "https://api.openai.com/v1/chat/completions",
-		model: "gpt-4.1-mini"
+		model: "gpt-5-mini"
 	},
 	anthropic: {
 		endpoint: "https://api.anthropic.com/v1/messages",
 		model: "claude-3-7-sonnet-latest"
 	}
 };
+
+function getProviderDefaults(provider) {
+	return providerDefaults[provider] || providerDefaults.gemini;
+}
+
+function buildSettingsFromProvider(provider, apiKey = "") {
+	const defaults = getProviderDefaults(provider);
+
+	return {
+		provider,
+		endpoint: defaults.endpoint,
+		model: defaults.model,
+		apiKey
+	};
+}
 
 const state = {
 	formData: null,
@@ -64,6 +80,7 @@ function cacheElements() {
 	elements.providerSelect = document.getElementById("provider-select");
 	elements.endpointInput = document.getElementById("endpoint-input");
 	elements.modelInput = document.getElementById("model-input");
+	elements.formContextInput = document.getElementById("form-context-input");
 	elements.apiKeyInput = document.getElementById("api-key-input");
 	elements.saveSettingsButton = document.getElementById("save-settings-button");
 	elements.settingsPanel = document.getElementById("settings-panel");
@@ -145,6 +162,7 @@ async function handleGenerateClick() {
 
 	const currentSettings = collectSettingsFromForm();
 	state.settings = currentSettings;
+	console.log("[popup] Collected settings:", {provider: currentSettings.provider, model: currentSettings.model, apiKey: currentSettings.apiKey ? "set" : "empty", formContext: currentSettings.formContext ? "set" : "empty"});
 
 	setBusy(true, "Envoi à l'IA...");
 	try {
@@ -153,6 +171,7 @@ async function handleGenerateClick() {
 			form: formPayload,
 			settings: currentSettings
 		});
+		console.log("[popup] Response from background:", response);
 
 		if (!response?.ok) {
 			throw new Error(response?.error || "Réponse IA indisponible.");
@@ -165,7 +184,7 @@ async function handleGenerateClick() {
 		elements.copyButton.disabled = state.suggestions.length === 0;
 		setStatus(
 			response.mode === "heuristic"
-				? "Réponses générées localement."
+				? "Réponses générées localement (heuristique, sans API)."
 				: "Réponses proposées par l'IA.",
 			"success"
 		);
@@ -212,10 +231,7 @@ async function handleSaveSettingsClick() {
 
 function handleProviderChange() {
 	const provider = elements.providerSelect.value;
-	const defaults = providerDefaults[provider] || providerDefaults.gemini;
-
-	elements.endpointInput.value = defaults.endpoint;
-	elements.modelInput.value = defaults.model;
+	applyProviderDefaultsToForm(provider, elements.apiKeyInput.value.trim(), elements.formContextInput.value.trim());
 }
 
 async function loadSettings() {
@@ -275,6 +291,19 @@ async function updateCurrentHistoryEntrySuggestions(suggestions) {
 
 	entry.suggestions = suggestions;
 	await chrome.storage.local.set({ formAnalyzerHistory: state.history });
+}
+
+async function deleteHistoryEntry(historyId) {
+	state.history = state.history.filter((item) => item.id !== historyId);
+	if (state.currentHistoryEntryId === historyId) {
+		state.formData = null;
+		state.suggestions = [];
+		state.currentHistoryEntryId = "";
+		renderCurrentAnalysis();
+	}
+	await chrome.storage.local.set({ formAnalyzerHistory: state.history });
+	renderHistory();
+	setStatus("Entrée supprimée de l'historique.", "success");
 }
 
 function renderCurrentAnalysis() {
@@ -359,13 +388,25 @@ function createHistoryItem(entry, analyzedAt) {
 	url.className = "history-item-url";
 	url.textContent = getHistoryUrl(entry.formData);
 
-	const button = document.createElement("button");
-	button.type = "button";
-	button.className = "history-load-button";
-	button.dataset.historyId = entry.id || "";
-	button.textContent = "Charger";
+	const buttonsContainer = document.createElement("div");
+	buttonsContainer.className = "history-item-buttons";
 
-	article.append(title, meta, url, button);
+	const loadButton = document.createElement("button");
+	loadButton.type = "button";
+	loadButton.className = "history-load-button";
+	loadButton.dataset.historyId = entry.id || "";
+	loadButton.dataset.action = "load";
+	loadButton.textContent = "Charger";
+
+	const deleteButton = document.createElement("button");
+	deleteButton.type = "button";
+	deleteButton.className = "history-delete-button";
+	deleteButton.dataset.historyId = entry.id || "";
+	deleteButton.dataset.action = "delete";
+	deleteButton.textContent = "Supprimer";
+
+	buttonsContainer.append(loadButton, deleteButton);
+	article.append(title, meta, url, buttonsContainer);
 	return article;
 }
 
@@ -375,7 +416,15 @@ async function handleHistoryClick(event) {
 		return;
 	}
 
-	const entry = state.history.find((item) => item.id === button.dataset.historyId);
+	const action = button.dataset.action || "load";
+	const historyId = button.dataset.historyId;
+
+	if (action === "delete") {
+		await deleteHistoryEntry(historyId);
+		return;
+	}
+
+	const entry = state.history.find((item) => item.id === historyId);
 	if (!entry) {
 		return;
 	}
@@ -484,23 +533,30 @@ function updateSettingsPanelState() {
 
 function applySettingsToForm(settings) {
 	const provider = settings.provider || defaultSettings.provider;
-	const defaults = providerDefaults[provider] || providerDefaults.gemini;
-	elements.providerSelect.value = provider;
-	elements.endpointInput.value = settings.endpoint || defaults.endpoint;
-	elements.modelInput.value = settings.model || defaults.model;
-	elements.apiKeyInput.value = settings.apiKey || "";
+	applyProviderDefaultsToForm(provider, settings.apiKey || "", settings.formContext || "");
 }
 
 function collectSettingsFromForm() {
 	const provider = elements.providerSelect.value || defaultSettings.provider;
-	const defaults = providerDefaults[provider] || providerDefaults.gemini;
+	const apiKey = elements.apiKeyInput.value.trim();
+	const formContext = elements.formContextInput.value.trim();
+	console.log("[popup] collectSettingsFromForm: provider=", provider, "apiKey from input=", apiKey ? "set (" + apiKey.substring(0, 10) + "...)" : "EMPTY", "formContext=", formContext ? "set" : "EMPTY");
 
 	return {
-		provider,
-		endpoint: elements.endpointInput.value.trim() || defaults.endpoint,
-		model: elements.modelInput.value.trim() || defaults.model,
-		apiKey: elements.apiKeyInput.value.trim()
+		...buildSettingsFromProvider(provider, apiKey),
+		formContext
 	};
+}
+
+function applyProviderDefaultsToForm(provider, apiKey = "", formContext = "") {
+	const defaults = getProviderDefaults(provider);
+	elements.providerSelect.value = provider;
+	elements.endpointInput.value = defaults.endpoint;
+	elements.modelInput.value = defaults.model;
+	elements.endpointInput.placeholder = defaults.endpoint;
+	elements.modelInput.placeholder = defaults.model;
+	elements.apiKeyInput.value = apiKey;
+	elements.formContextInput.value = formContext;
 }
 
 function getFormPayload() {

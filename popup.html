@@ -16,7 +16,7 @@
         <section class="panel">
             <div class="buttons-row">
                 <button id="analyze-button" class="primary" type="button">Analyser le formulaire</button>
-                <button id="generate-button" class="secondary" type="button" disabled>Générer avec Gemini</button>
+                <button id="generate-button" class="secondary" type="button" disabled>Générer avec l'IA</button>
                 <button id="copy-button" class="tertiary" type="button" disabled>Copier le JSON</button>
                 <button id="reset-button" class="tertiary" type="button">Réinitialiser</button>
             </div>
@@ -48,34 +48,39 @@
         </details>
 
         <details class="panel settings-panel" id="settings-panel">
-            <summary>Configuration Gemini</summary>
+            <summary>Configuration IA</summary>
             <div class="settings-grid">
                 <label>
-                    <span>Provider</span>
+                    <span>Fournisseur IA</span>
                     <select id="provider-select">
-                        <option value="gemini" selected>Gemini 3 Flash / Google AI Studio</option>
-                        <option value="gemma">Gemma 4 31B / Google AI Studio</option>
-                        <option value="openai">OpenAI / compatible</option>
-                        <option value="anthropic">Anthropic</option>
+                        <option value="gemini" selected>Gemini 2.5 Flash / Google AI Studio</option>
+                        <option value="gemma">Gemma 3 27B / Google AI Studio</option>
+                        <option value="openai">GPT 5 mini / OpenAI</option>
+                        <option value="anthropic">Claude Sonnet 3.7 / Anthropic</option>
                     </select>
                 </label>
 
                 <label>
-                    <span>Endpoint Gemini</span>
-                    <input id="endpoint-input" type="text" placeholder="https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent">
+                    <span>Endpoint du fournisseur</span>
+                    <input id="endpoint-input" type="text" disabled placeholder="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent">
                 </label>
 
                 <label>
-                    <span>Modèle</span>
-                    <input id="model-input" type="text" placeholder="gemini-3-flash">
+                    <span>Modèle du fournisseur</span>
+                    <input id="model-input" type="text" disabled placeholder="gemini-2.5-flash">
+                </label>
+
+                <label class="settings-textarea-label">
+                    <span>Contexte du formulaire</span>
+                    <textarea id="form-context-input" rows="4" placeholder="Décrire ici le contexte utile pour les questions, par exemple le sujet du formulaire ou les indices texte visibles à l'écran"></textarea>
                 </label>
 
                 <label>
-                    <span>Clé API Google AI Studio</span>
+                    <span>API_KEY</span>
                     <input id="api-key-input" type="password" placeholder="AIza...">
                 </label>
 
-                <p class="settings-note">Si ce champ est vide, l'extension lit automatiquement `GEMINI_KEY` depuis le fichier .env.</p>
+                <p class="settings-note">Si ce champ est vide, l'extension lit automatiquement `API_KEY` depuis le fichier .env.</p>
 
                 <button id="save-settings-button" class="secondary" type="button">Enregistrer la configuration</button>
             </div>

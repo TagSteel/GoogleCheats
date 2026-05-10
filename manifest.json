@@ -3,7 +3,7 @@
   "name": "Google Cheats",
   "short_name": "GCheats",
   "author": ["TagSteel", "MythUp"],
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Analyse les formulaires et l'IA propose des réponses.",
   "permissions": ["activeTab", "storage", "scripting", "tabs"],
   "icons": {
@@ -12,14 +12,14 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "host_permissions": ["https://*.forms.gle/*", "https://generativelanguage.googleapis.com/*"],
+  "host_permissions": ["https://*.forms.gle/*", "https://generativelanguage.googleapis.com/*", "https://api.openai.com/*", "https://api.anthropic.com/*"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
     "default_popup": "popup.html"
   },
-  "default_title": "Google Cheats - Gemini",
+  "default_title": "Google Cheats - IA",
   "content_scripts": [
     {
       "matches": ["https://*.forms.gle/*"],

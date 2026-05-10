@@ -1,9 +1,37 @@
 const defaultAiSettings = {
   provider: "gemini",
-  endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent",
-  model: "gemini-3-flash",
+  endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+  model: "gemini-2.5-flash",
+  formContext: "",
   apiKey: ""
 };
+
+const providerDefaults = {
+  gemini: {
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+    model: "gemini-2.5-flash"
+  },
+  gemma: {
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemma-3-27b-it:generateContent",
+    model: "gemma-3-27b-it"
+  },
+  openai: {
+    endpoint: "https://api.openai.com/v1/chat/completions",
+    model: "gpt-5-mini"
+  },
+  anthropic: {
+    endpoint: "https://api.anthropic.com/v1/messages",
+    model: "claude-3-7-sonnet-latest"
+  }
+};
+
+function getProviderDefaults(provider) {
+  return providerDefaults[provider] || providerDefaults.gemini;
+}
+
+function isGoogleAiProvider(provider) {
+  return provider === "gemini" || provider === "gemma";
+}
 
 let cachedGeminiEnvKey = null;
 
@@ -20,6 +48,10 @@ const systemPrompt = [
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "GENERATE_ANSWERS") {
+    console.log("[background] Received GENERATE_ANSWERS message with settings:", {
+      provider: message.settings?.provider,
+      apiKey: message.settings?.apiKey ? "set" : "empty"
+    });
     handleGenerateAnswers(message)
       .then((payload) => sendResponse(payload))
       .catch((error) => sendResponse({ ok: false, error: error.message || "Erreur inconnue." }));
@@ -37,15 +69,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleGenerateAnswers(message) {
   const settings = normalizeSettings(message.settings);
   const form = normalizeFormPayload(message.form);
-  const apiKey = settings.provider === "gemini"
-    ? await resolveGeminiApiKey(settings.apiKey)
+  console.log("[background] handleGenerateAnswers: provider=", settings.provider, "apiKey from settings=", settings.apiKey ? "set" : "empty");
+  const apiKey = isGoogleAiProvider(settings.provider)
+    ? await resolveApiKey(settings.apiKey)
     : settings.apiKey;
+
+  console.log("[background] resolved apiKey:", apiKey ? "✓ found" : "✗ empty");
 
   if (!form.questions.length) {
     return { ok: true, mode: "heuristic", answers: [] };
   }
 
   if (!apiKey) {
+    console.log("[background] No API key, falling back to heuristic mode");
     return {
       ok: true,
       mode: "heuristic",
@@ -73,31 +109,38 @@ async function handleGenerateAnswers(message) {
   }
 }
 
-async function resolveGeminiApiKey(explicitKey) {
+async function resolveApiKey(explicitKey) {
   const trimmedKey = String(explicitKey || "").trim();
   if (trimmedKey) {
+    console.log("[background] API key from settings (explicit):", trimmedKey.substring(0, 10) + "...");
     return trimmedKey;
   }
 
+  console.log("[background] No explicit API key, checking cache and .env");
   if (cachedGeminiEnvKey !== null) {
+    console.log("[background] Found cached API key from .env:", cachedGeminiEnvKey.substring(0, 10) + "...");
     return cachedGeminiEnvKey;
   }
 
-  cachedGeminiEnvKey = await loadGeminiApiKeyFromEnv();
+  cachedGeminiEnvKey = await loadApiKeyFromEnv();
+  console.log("[background] Loaded from .env:", cachedGeminiEnvKey ? cachedGeminiEnvKey.substring(0, 10) + "..." : "(empty)");
   return cachedGeminiEnvKey;
 }
 
-async function loadGeminiApiKeyFromEnv() {
+async function loadApiKeyFromEnv() {
   try {
     const response = await fetch(chrome.runtime.getURL(".env"));
 
     if (!response.ok) {
+      console.log("[background] .env fetch failed with status:", response.status);
       return "";
     }
 
     const envFile = await response.text();
     const parsedEnv = parseEnvFile(envFile);
-    return String(parsedEnv.GEMINI_KEY || parsedEnv.GEMINI_API_KEY || parsedEnv.GOOGLE_AI_STUDIO_KEY || "").trim();
+    const key = String(parsedEnv.API_KEY || "").trim();
+    console.log("[background] .env parsed, API_KEY found:", key ? "yes" : "no");
+    return key;
   } catch (error) {
     return "";
   }
@@ -132,16 +175,13 @@ function parseEnvFile(content) {
 
 function normalizeSettings(settings = {}) {
   const provider = settings.provider || defaultAiSettings.provider;
-  const defaults = provider === "gemini"
-    ? { endpoint: defaultAiSettings.endpoint, model: defaultAiSettings.model }
-    : provider === "anthropic"
-    ? { endpoint: "https://api.anthropic.com/v1/messages", model: "claude-3-7-sonnet-latest" }
-    : { endpoint: defaultAiSettings.endpoint, model: defaultAiSettings.model };
+  const defaults = getProviderDefaults(provider);
 
   return {
     provider,
-    endpoint: settings.endpoint || defaults.endpoint,
-    model: settings.model || defaults.model,
+    endpoint: defaults.endpoint,
+    model: defaults.model,
+    formContext: settings.formContext || "",
     apiKey: settings.apiKey || ""
   };
 }
@@ -161,12 +201,15 @@ function normalizeFormPayload(form) {
 
 async function callProvider(settings, form) {
   const prompt = [
+    "Contexte fourni par l'utilisateur:",
+    settings.formContext || "(aucun contexte supplémentaire)",
+    "L'IA ne voit pas les images du formulaire; utilise le contexte texte fourni pour compenser si nécessaire.",
     "Voici la structure JSON du formulaire:",
     JSON.stringify({ form }, null, 2),
     "Retournez uniquement un JSON valide correspondant au format demandé."
   ].join("\n\n");
 
-  if (settings.provider === "gemini") {
+  if (settings.provider === "gemini" || settings.provider === "gemma") {
     return callGemini(settings, prompt);
   }
 
